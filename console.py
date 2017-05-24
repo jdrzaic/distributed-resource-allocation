@@ -4,7 +4,6 @@ import json
 from mpi4py import MPI
 
 
-sys.path.append('../src/')
 import commutils
 import comm
 
