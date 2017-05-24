@@ -1,9 +1,7 @@
-import time
 from threading import Thread, Lock
 from queue import Queue
-from types import SimpleNamespace
 from mpi4py import MPI
-
+from enum import Enum
 
 import commutils
 
@@ -66,6 +64,9 @@ class MPICommAdapter(BaseCommAdapter):
     def recv(self, source, tag=0):
         return self._queues[source].get()
 
+    def iprobe(self, source, tag=0):
+        self._comm.iprobe(source=source, tag=tag)
+
     ssend = send
 
     srecv = recv
@@ -86,14 +87,6 @@ class MPICommAdapter(BaseCommAdapter):
                 self._to_close -= 1
             elif t == 'app':
                 self._queues[source].put(msg)
-
-
-class Raymond1OfMCommAdapter(MPICommAdapter):
-    def __init__(self, comm, logging):
-        super().__init__(comm, logging=logging)
-        size = comm.Get_size()
-        self._permission_received = [[False for i in size] for i in size]
-        self._resources_used = [set() for i in size]
 
 
 COMM_WORLD = MPICommAdapter(MPI.COMM_WORLD, logging=False)

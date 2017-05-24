@@ -1,6 +1,5 @@
 import sys
 import time
-import json
 from mpi4py import MPI
 
 
