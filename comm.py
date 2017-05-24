@@ -88,4 +88,12 @@ class MPICommAdapter(BaseCommAdapter):
                 self._queues[source].put(msg)
 
 
+class Raymond1OfMCommAdapter(MPICommAdapter):
+    def __init__(self, comm, logging):
+        super().__init__(comm, logging=logging)
+        size = comm.Get_size()
+        self._permission_received = [False for i in size]
+        self._resources_used = [set() for i in size]
+
+
 COMM_WORLD = MPICommAdapter(MPI.COMM_WORLD, logging=False)
