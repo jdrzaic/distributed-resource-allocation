@@ -12,6 +12,7 @@ _PRINT_POSTFIX = '\033[0m'
 _LOG_PREFIX  = '\033[0m[LOG]\033[34m[{time:6.0f}ms]\033[32m[ID:{id:3d}]: \033[0m'
 _LOG_POSTFIX = ''
 
+
 def set_comm(comm):
     """ Set communicator used to obtain process IDs.
 

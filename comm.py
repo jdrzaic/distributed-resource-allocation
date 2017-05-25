@@ -1,7 +1,6 @@
 from threading import Thread, Lock
 from queue import Queue
 from mpi4py import MPI
-from enum import Enum
 
 import commutils
 
@@ -58,11 +57,10 @@ class MPICommAdapter(BaseCommAdapter):
         self._recv_thread.join()
 
     def send(self, msg, dest, tag=0):
-        with self.__send_lock:
-            self._comm.send(('app', msg), dest=dest)
+        self.ssend(msg, dest=dest, tag=tag)
 
     def recv(self, source, tag=0):
-        return self._queues[source].get()
+        return self.srecv(source=source, tag=tag)
 
     def iprobe(self, source, tag=0):
         self._comm.iprobe(source=source, tag=tag)
