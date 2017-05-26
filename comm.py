@@ -3,6 +3,7 @@ from queue import Queue
 from mpi4py import MPI
 
 import commutils
+from enums import CsState, MsgTag
 
 
 class BaseCommAdapter(object):
@@ -36,13 +37,18 @@ class BaseCommAdapter(object):
 
 
 class MPICommAdapter(BaseCommAdapter):
-    def __init__(self, comm, logging=False):
+    def __init__(self, comm, logging=False, m=1):
         super().__init__(comm, logging=logging)
         size = comm.Get_size()
-        self._queues = [Queue() for i in range(size)]
-        self._to_close = size - 1
+        self._m = m
         self._recv_thread = Thread(target=self._recv_daemon)
-        self.__send_lock = Lock()
+        self._cs_state = CsState.OUT
+        self._id = comm.Get_rank()
+        self._lrd = 0
+        self._clock = 0
+        self._used_by = [0 for i in size]
+        self._perm_delayed = [0 for i in size]
+        self._lock = Lock()
 
     def open(self):
         self._log('Starting receiver thread')
@@ -50,19 +56,14 @@ class MPICommAdapter(BaseCommAdapter):
 
     def close(self):
         self._log('Closing communicator')
-        for i in range(self.Get_size()):
-            if i != self.Get_rank():
-                self._comm.send(('ctl', 'exit'), dest=i)
-        self._log('Waiting for receiver thread to finish')
-        self._recv_thread.join()
 
-    def send(self, msg, dest, tag=0):
+    def send(self, msg, dest, tag=MsgTag.REQUEST):
         self.ssend(msg, dest=dest, tag=tag)
 
-    def recv(self, source, tag=0):
+    def recv(self, source, tag=MsgTag.REQUEST):
         return self.srecv(source=source, tag=tag)
 
-    def iprobe(self, source, tag=0):
+    def iprobe(self, source, tag=MsgTag.REQUEST):
         self._comm.iprobe(source=source, tag=tag)
 
     ssend = send
@@ -73,18 +74,38 @@ class MPICommAdapter(BaseCommAdapter):
         self._log('Receiver thread started')
         status = MPI.Status()
         while True:
-            self._log(self._to_close)
-            if self._to_close == 0:
-                break
-            t, msg = self._comm.recv(source=MPI.ANY_SOURCE, status=status,
-                                     tag=MPI.ANY_TAG)
-            source = status.Get_source()
-            self._log('Received {} message "{}" from {}'
-                      .format(t, msg, source))
-            if t == 'ctl' and msg == 'exit':
-                self._to_close -= 1
-            elif t == 'app':
-                self._queues[source].put(msg)
+            if self.iprobe(source=MPI.ANY_SOURCE, tag=MsgTag.REQUEST):
+                pass
+            if self.iprobe(source=MPI.ANY_SOURCE, tag=MsgTag.NOT_USED):
+                pass
+            result = self._comm.recv(source=MPI.ANY_SOURCE, status=status, tag=MPI.ANY_TAG)
+
+    def acquire_resource(self, k, type='basic'):
+        with self._lock:
+            self._cs_state = CsState.TRYING
+            self._lrd = self._clock + 1
+            all_indexes = range(0, self._comm.Get_size())
+            indexes_to_check = set(all_indexes) - set(self._id)
+            for j in indexes_to_check:
+                self.send(
+                    {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, MsgTag.REQUEST)
+                self._used_by[j] += self._m
+            self._used_by[self._id] = k
+        while True:
+            with self._lock:
+                if sum(self._used_by) <= self._m:
+                    break
+        self._cs_state = CsState.IN
+
+    def release_resource(self, k):
+        with self._lock:
+            self._cs_state = CsState.OUT
+            indexes_to_check = set(range(0, self._comm.Get_size()))
+            for j in indexes_to_check:
+                if self._perm_delayed[j] > 0:
+                    self._comm.send(
+                        {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, MsgTag.NOT_USED)
+            self._perm_delayed = [0 for i in self._comm.Get_size()]
 
 
 COMM_WORLD = MPICommAdapter(MPI.COMM_WORLD, logging=False)
