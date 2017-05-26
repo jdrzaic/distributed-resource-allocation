@@ -42,12 +42,13 @@ class MPICommAdapter(BaseCommAdapter):
         size = comm.Get_size()
         self._m = m
         self._recv_thread = Thread(target=self._recv_daemon)
-        self._cs_state = CsState.OUT
         self._id = comm.Get_rank()
+        self._cs_state = CsState.OUT
         self._lrd = 0
         self._clock = 0
         self._used_by = [0 for i in size]
         self._perm_delayed = [0 for i in size]
+        self._prio = False
         self._lock = Lock()
 
     def open(self):
@@ -72,13 +73,32 @@ class MPICommAdapter(BaseCommAdapter):
 
     def _recv_daemon(self):
         self._log('Receiver thread started')
-        status = MPI.Status()
         while True:
             if self.iprobe(source=MPI.ANY_SOURCE, tag=MsgTag.REQUEST):
-                pass
+                with self._lock:
+                    result = self.recv(source=MPI.ANY_SOURCE, tag=MsgTag.REQUEST)
+                    self._clock = max(self._clock, result['k'])
+                    less_op = self._lrd < result['lrd'] | \
+                                          self._lrd == result['lrd'] & self._id < result['id']
+                    self._prio = self._cs_state is not CsState.OUT and less_op
+                    if not self._prio or (self._prio and self._perm_delayed[result['id']]):
+                        self._log('Sending permission for {0} {1}'.format(self._m,' instances'))
+                        self.send(
+                            {'lrd': self._lrd, 'id': self._id, 'k': self._m, 'type': type},
+                            result['id'], MsgTag.NOT_USED)
+                    else:
+                        if result['k'] != self._m:
+                            self._log(
+                                'Sending permission for {0} {1}'.format(
+                                    self._m - result['k'], ' instances'))
+                            self.send(
+                                {'lrd': self._lrd, 'id': self._id, 'k': (self._m,  - result['k']), 'type': type},
+                                result['id'], MsgTag.NOT_USED)
+                        self._perm_delayed[result['id']] += 1
             if self.iprobe(source=MPI.ANY_SOURCE, tag=MsgTag.NOT_USED):
-                pass
-            result = self._comm.recv(source=MPI.ANY_SOURCE, status=status, tag=MPI.ANY_TAG)
+                with self._lock:
+                    result = self.recv(source=MPI.ANY_SOURCE, tag=MsgTag.NOT_USED)
+                    self._used_by[result['id']] -= result['k']
 
     def acquire_resource(self, k, type='basic'):
         with self._lock:
@@ -87,6 +107,8 @@ class MPICommAdapter(BaseCommAdapter):
             all_indexes = range(0, self._comm.Get_size())
             indexes_to_check = set(all_indexes) - set(self._id)
             for j in indexes_to_check:
+                self._log(
+                    'Sending request for {0} {1}'.format(k, ' instances'))
                 self.send(
                     {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, MsgTag.REQUEST)
                 self._used_by[j] += self._m
@@ -103,6 +125,8 @@ class MPICommAdapter(BaseCommAdapter):
             indexes_to_check = set(range(0, self._comm.Get_size()))
             for j in indexes_to_check:
                 if self._perm_delayed[j] > 0:
+                    self._log(
+                        'Sending permission for {0} {1}'.format(k, ' instances'))
                     self._comm.send(
                         {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, MsgTag.NOT_USED)
             self._perm_delayed = [0 for i in self._comm.Get_size()]
