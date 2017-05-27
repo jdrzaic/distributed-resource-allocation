@@ -1,8 +1,8 @@
-from enums import CsState, MsgTag
 import sys
 import comm
 import commutils
 from mpi4py import MPI
+from time import sleep
 
 
 def create_comm(m):
@@ -17,9 +17,18 @@ def usage():
 
 
 def main(argv):
-    res = argv[1]  # number of resources
+    res = int(argv[1])  # number of resources
     commutils.set_comm(create_comm(res))
     acomm = commutils.comm()
+    if commutils.procid() == 1:
+        acomm.acquire_resource(res-1)
+        sleep(5)
+        acomm.release_resource(res-1)
+    if commutils.procid() == 3:
+        sleep(2)
+        acomm.acquire_resource(2)
+        sleep(4)
+        acomm.release_resource(2)
 
 
 if __name__ == "__main__":

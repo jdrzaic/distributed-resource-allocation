@@ -7,8 +7,6 @@ class CsState(Enum):
     IN = 2
 
 
-class MsgTag(Enum):
-    REQUEST = 0
-    PERMISSION = 1
-    NOT_USED = 2
+REQUEST = 0
+NOT_USED = 2
 

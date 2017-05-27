@@ -8,7 +8,7 @@ import comm
 
 
 def create_comm():
-    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=True)
+    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=True, m=2)
     acomm.open()
     return acomm
 
