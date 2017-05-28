@@ -37,8 +37,9 @@ class BaseCommAdapter(object):
 
 
 class MPICommAdapter(BaseCommAdapter):
-    def __init__(self, comm, logging=False, m=1):
+    def __init__(self, comm, logging=False, m=1, info_logging=True):
         super().__init__(comm, logging=logging)
+        self._info_logging = info_logging
         size = comm.Get_size()
         self._m = m
         self._recv_thread = Thread(target=self._recv_daemon)
@@ -54,7 +55,8 @@ class MPICommAdapter(BaseCommAdapter):
 
     def open(self):
         self._recv_thread.start()
-        self._log_thread.start()
+        if self._info_logging:
+            self._log_thread.start()
 
     def close(self):
         self._log('Closing communicator')
@@ -77,11 +79,11 @@ class MPICommAdapter(BaseCommAdapter):
     def _log_daemon(self):
         while True:
             if self._cs_state == CsState.IN:
-                self._log('Working with {0} resources'.format(self._used_by[self._id]))
+                commutils.log('Working with {0} resources'.format(self._used_by[self._id]))
             elif self._cs_state == CsState.TRYING:
-                self._log('Trying for {0} resources'.format(self._used_by[self._id]))
+                commutils.log('Trying for {0} resources'.format(self._used_by[self._id]))
             else:
-                self._log('Resting...')
+                commutils.log('Resting...')
             sleep(1)
 
     def _recv_daemon(self):

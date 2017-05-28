@@ -6,7 +6,7 @@ from time import sleep
 
 
 def create_comm(m):
-    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=True, m=m)
+    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=False, m=m, info_logging=True)
     acomm.open()
     return acomm
 
@@ -24,11 +24,19 @@ def main(argv):
         acomm.acquire_resource(res-1)
         sleep(5)
         acomm.release_resource(res-1)
+        sleep(1)
+        acomm.acquire_resource(2)
+        sleep(6)
+        acomm.release_resource(2)
     if commutils.procid() == 3:
         sleep(2)
         acomm.acquire_resource(2)
         sleep(4)
         acomm.release_resource(2)
+    if commutils.procid() == 0:
+        acomm.acquire_resource(1)
+        sleep(0.5)
+        acomm.release_resource(1)
 
 
 if __name__ == "__main__":
