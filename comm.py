@@ -1,6 +1,7 @@
 from threading import Thread, Lock
 from mpi4py import MPI
 import sys
+from time import sleep
 import commutils
 from enums import CsState, REQUEST, NOT_USED
 
@@ -41,6 +42,7 @@ class MPICommAdapter(BaseCommAdapter):
         size = comm.Get_size()
         self._m = m
         self._recv_thread = Thread(target=self._recv_daemon)
+        self._log_thread = Thread(target=self._log_daemon)
         self._id = comm.Get_rank()
         self._cs_state = CsState.OUT
         self._lrd = sys.maxsize
@@ -52,6 +54,7 @@ class MPICommAdapter(BaseCommAdapter):
 
     def open(self):
         self._recv_thread.start()
+        self._log_thread.start()
 
     def close(self):
         self._log('Closing communicator')
@@ -71,6 +74,16 @@ class MPICommAdapter(BaseCommAdapter):
     def Iprobe(self, source, tag=REQUEST):
         return self._comm.Iprobe(source=source, tag=tag)
 
+    def _log_daemon(self):
+        while True:
+            if self._cs_state == CsState.IN:
+                self._log('Working with {0} resources'.format(self._used_by[self._id]))
+            elif self._cs_state == CsState.TRYING:
+                self._log('Trying for {0} resources'.format(self._used_by[self._id]))
+            else:
+                self._log('Resting...')
+            sleep(1)
+
     def _recv_daemon(self):
         self._log('Receiver thread started for process with id {0}'.format(self._id))
         status = MPI.Status()
@@ -87,23 +100,24 @@ class MPICommAdapter(BaseCommAdapter):
                     if not self._prio or (self._prio and self._perm_delayed[result['id']]):
                         self._log('Sending permission for {0} {1}'.format(self._m,'instances'))
                         self.send(
-                            {'lrd': self._lrd, 'id': self._id, 'k': self._m, 'type': type},
+                            {'lrd': self._lrd, 'id': self._id, 'k': self._m, 'type': result['type']},
                             result['id'], NOT_USED)
                         self._log('Sent permission to {0}'.format(result['id']))
                     else:
                         if self._used_by[self._id] != self._m:
                             self._log(
                                 'Sending permission for {0} {1}'.format(
-                                    self._m - self._used_by[self._id], ' instances'))
+                                    self._m - self._used_by[self._id], 'instances'))
                             self.send(
                                 {'lrd': self._lrd, 'id': self._id,
-                                 'k': (self._m,  - self._used_by[self._id]), 'type': type},
+                                 'k': (self._m - self._used_by[self._id]), 'type': result['type']},
                                 result['id'], NOT_USED)
                             self._log("Sent permission to {0}".format(result['id']))
                         self._perm_delayed[result['id']] += 1
             if self.Iprobe(source=MPI.ANY_SOURCE, tag=NOT_USED):
                 with self._lock:
                     result = self.recv(source=MPI.ANY_SOURCE, status=status, tag=NOT_USED)
+                    self._log("Received permission from {0}".format(result['id']))
                     self._used_by[result['id']] -= result['k']
 
     def acquire_resource(self, k, type='basic'):
@@ -127,7 +141,7 @@ class MPICommAdapter(BaseCommAdapter):
                     break
         self._log("Acquired {0} resources".format(k))
 
-    def release_resource(self, k):
+    def release_resource(self, k, type='basic'):
         self._log("Releasing {0} resources".format(k))
         with self._lock:
             self._cs_state = CsState.OUT
@@ -135,9 +149,10 @@ class MPICommAdapter(BaseCommAdapter):
             for j in indexes_to_check:
                 if self._perm_delayed[j] > 0:
                     self._log(
-                        'Sending permission for {0} {1}'.format(k, ' instances'))
+                        'Sending permission for {0} {1}'.format(k, 'instances'))
                     self.send(
                         {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, NOT_USED)
+                    self._log("Sent permission to {0}".format(j))
             self._perm_delayed = [0 for i in self._comm.Get_size()]
 
 
