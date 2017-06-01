@@ -9,4 +9,4 @@ class CsState(Enum):
 
 REQUEST = 0
 NOT_USED = 2
-
+PERMISSION = 3
