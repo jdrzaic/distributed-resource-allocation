@@ -6,7 +6,7 @@ from time import sleep
 
 
 def create_comm(m):
-    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=False, m=m, info_logging=True)
+    acomm = comm.MPICommAdapter(MPI.COMM_WORLD, logging=True, m=m, info_logging=True)
     acomm.open()
     return acomm
 

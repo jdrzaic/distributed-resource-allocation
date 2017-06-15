@@ -40,7 +40,8 @@ class MPICommAdapter(BaseCommAdapter):
     def __init__(self, comm, logging=False, m=1, info_logging=True):
         super().__init__(comm, logging=logging)
         self._info_logging = info_logging
-        size = comm.Get_size()
+        self._size = comm.Get_size()
+        size = self._size
         self._m = m
         self._recv_thread = Thread(target=self._recv_daemon)
         self._log_thread = Thread(target=self._log_daemon)
@@ -155,7 +156,7 @@ class MPICommAdapter(BaseCommAdapter):
                     self.send(
                         {'lrd': self._lrd, 'id': self._id, 'k': k, 'type': type}, j, NOT_USED)
                     self._log("Sent permission to {0}".format(j))
-            self._perm_delayed = [0 for i in self._comm.Get_size()]
+            self._perm_delayed = [0 for i in range(self._size)]
 
 
 COMM_WORLD = MPICommAdapter(MPI.COMM_WORLD, logging=False)
