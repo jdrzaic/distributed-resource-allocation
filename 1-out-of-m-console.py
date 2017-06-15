@@ -21,7 +21,7 @@ class Process(BaseCommAdapter):
 		self._cs_state = CsState.OUT
 		self._nb_perm = 0
 
-		self._log_thread = Thread(target=self._log)
+		self._log_thread = Thread(target=self._logThr)
 		self._communicate_thread = Thread(target=self._communicate)
 		self._lock = Lock()
 
@@ -31,10 +31,10 @@ class Process(BaseCommAdapter):
 		if self._info_logging:
 			self._log_thread.start()
 
-	def _log(self):
+	def _logThr(self):
 		while True:
 			if self._cs_state == CsState.IN:
-				commutils.log('Working with resources')
+				commutils.log('Working with resource')
 			elif self._cs_state == CsState.TRYING:
 				commutils.log('Trying ...')
 			else:
@@ -47,6 +47,7 @@ class Process(BaseCommAdapter):
 			if self._comm.Iprobe(source=MPI.ANY_SOURCE, tag=PERMISSION):
 				with self._lock:
 					permission = self._comm.recv(source=MPI.ANY_SOURCE, tag=PERMISSION)
+					#self._log("Dobio PERMISSION od ", permission['id'])
 					self._wait_perm[permission['id']] -= permission['count']
 					if (self._cs_state == CsState.TRYING and self._wait_perm[permission['id']] == 0):
 						self._nb_perm += 1
@@ -54,7 +55,7 @@ class Process(BaseCommAdapter):
 			if self._comm.Iprobe(source=MPI.ANY_SOURCE, tag=REQUEST):
 				with self._lock:
 					request = self._comm.recv(source=MPI.ANY_SOURCE, tag=REQUEST)
-					#print(self._id, " :Got request from ", request['id'])
+					#self._log("Dobio REQUEST od ", request['id'])
 					self._clock = max(self._clock, request['lrd'])
 					prio = (self._cs_state == CsState.IN or (self._cs_state == CsState.TRYING and (self._lrd < request['lrd'] or self._lrd == request['lrd'] and self._id < request['id'])))
 					if prio:
@@ -68,12 +69,13 @@ class Process(BaseCommAdapter):
 
 	def release_resource(self):
 		with self._lock:
-			#print(self._id, " :Release_resource...")
 			self._cs_state = CsState.OUT
+			self._log("OTPUSTIO sam resurs")
 			for i in range(self._numer_of_processes):
 				if self._perm_delayed[i] is not 0:
 					permission = {'id': self._id, 'count': self._perm_delayed[i]}
 					self._comm.isend(permission, dest=i, tag=PERMISSION)
+					#self._log("Saljem PERMISSION procesu ", i)
 					self._perm_delayed[i] = 0
 
 
@@ -87,12 +89,13 @@ class Process(BaseCommAdapter):
 			for i in indexes_to_check:
 				data = {'id': self._id, 'lrd': self._lrd}
 				request = self._comm.isend(data, dest=i, tag=REQUEST)
+				#self._log("Saljem REQUEST procesu ", i)
 				self._wait_perm[i] += 1
 
 		while True:
 			with self._lock:
 				if self._nb_perm >= (self._numer_of_processes - self._m):
-					#print(self._id, ": Got RESOURCE...")
+					#self._log("Dobio sam resurs...")
 					self._cs_state = CsState.IN
 					break
 
@@ -101,39 +104,45 @@ class Process(BaseCommAdapter):
 		return self._id
 
 def main(argv):
-	process = Process(MPI.COMM_WORLD, logging=False, m=int(argv[1]), info_logging=True)
+	process = Process(MPI.COMM_WORLD, logging=True, m=int(argv[1]), info_logging=True)
 	process.start()
 
-	if process.get_id()%3 == 0:
-		sleep(1)
-		process.acquire_resource()
-		sleep(3)
-		process.release_resource()
-		sleep(1)
-		process.acquire_resource()
-		sleep(2)
-		process.release_resource()
+	# if process.get_id()%3 == 0:
+	# 	sleep(1)
+	# 	process.acquire_resource()
+	# 	sleep(3)
+	# 	process.release_resource()
+	# 	sleep(1)
+	# 	process.acquire_resource()
+	# 	sleep(2)
+	# 	process.release_resource()
 
-	if process.get_id()%3 == 1:
-		sleep(3)
-		process.acquire_resource()
-		sleep(1)
-		process.release_resource()
-		sleep(5)
-		process.acquire_resource()
-		sleep(5)
-		process.release_resource()		
+	# if process.get_id()%3 == 1:
+	# 	sleep(3)
+	# 	process.acquire_resource()
+	# 	sleep(1)
+	# 	process.release_resource()
+	# 	sleep(5)
+	# 	process.acquire_resource()
+	# 	sleep(5)
+	# 	process.release_resource()		
 
-	if process.get_id()%3 == 2:
-		sleep(1)
-		process.acquire_resource()
-		sleep(2)
-		process.release_resource()
-		sleep(2)
-		process.acquire_resource()
-		sleep(1)
-		process.release_resource()
-
+	# if process.get_id()%3 == 2:
+	# 	sleep(1)
+	# 	process.acquire_resource()
+	# 	sleep(2)
+	# 	process.release_resource()
+	# 	sleep(2)
+	# 	process.acquire_resource()
+	# 	sleep(1)
+	# 	process.release_resource()
+	process.acquire_resource()
+	sleep(4)
+	process.release_resource()
+	sleep(2)
+	process.acquire_resource()
+	sleep(10)
+	process.release_resource()
 
 if __name__ == "__main__":
     main(sys.argv)
