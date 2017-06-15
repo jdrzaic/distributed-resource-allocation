@@ -72,7 +72,7 @@ class Process(BaseCommAdapter):
 			self._cs_state = CsState.OUT
 			for i in range(self._numer_of_processes):
 				if self._perm_delayed[i] is not 0:
-					permission = {'id': self._id, 'count': 1}
+					permission = {'id': self._id, 'count': self._perm_delayed[i]}
 					self._comm.isend(permission, dest=i, tag=PERMISSION)
 					self._perm_delayed[i] = 0
 
