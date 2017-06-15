@@ -68,7 +68,7 @@ class Process(BaseCommAdapter):
 
 	def release_resource(self):
 		with self._lock:
-			#print(self._id, " :Release_resource..")
+			#print(self._id, " :Release_resource...")
 			self._cs_state = CsState.OUT
 			for i in range(self._numer_of_processes):
 				if self._perm_delayed[i] is not 0:
