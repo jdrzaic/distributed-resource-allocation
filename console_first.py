@@ -3,6 +3,7 @@ import comm
 import commutils
 from mpi4py import MPI
 from time import sleep
+import random
 
 
 def create_comm(m):
@@ -28,15 +29,21 @@ def main(argv):
         acomm.acquire_resource(2)
         sleep(6)
         acomm.release_resource(2)
-    if commutils.procid() == 3:
+    elif commutils.procid() == 3:
         sleep(2)
         acomm.acquire_resource(2)
         sleep(4)
         acomm.release_resource(2)
-    if commutils.procid() == 0:
+    elif commutils.procid() == 0:
         acomm.acquire_resource(1)
-        sleep(0.5)
+        sleep(3)
         acomm.release_resource(1)
+    else:
+        sleep(commutils.procid())
+        num_res = random.randint(1,res-1)
+        acomm.acquire_resource(num_res)
+        sleep(random.randint(1,4))
+        acomm.release_resource(num_res)
 
 
 if __name__ == "__main__":
